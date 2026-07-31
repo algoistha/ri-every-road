@@ -105,6 +105,32 @@
   #legend .swatch { width: 26px; height: 0; border-radius: 2px; }
   #legend .label { color: var(--muted); }
 
+  #tide-popup {
+    position: absolute;
+    display: none;
+    z-index: 8;
+    width: 210px;
+    padding: 12px 14px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    font-size: 12px;
+    color: var(--text);
+    transition: background 0.25s ease, border-color 0.25s ease;
+  }
+  #tide-popup .title { font-weight: 600; margin-bottom: 2px; padding-right: 18px; }
+  #tide-popup .sub { color: var(--muted); font-size: 10.5px; margin-bottom: 8px; }
+  #tide-popup .row { display: flex; justify-content: space-between; padding: 2px 0; }
+  #tide-popup .row .lbl { color: var(--muted); }
+  #tide-popup .close {
+    position: absolute; top: 8px; right: 10px;
+    background: none; border: none; color: var(--muted);
+    font-size: 15px; line-height: 1; cursor: pointer; padding: 2px;
+  }
+  #tide-popup .close:hover { color: var(--text); }
+  #tide-popup .status { color: var(--muted); font-style: italic; }
+
   #tooltip {
     position: absolute;
     pointer-events: none;
@@ -304,7 +330,7 @@
     <p class="sub">Every road · U.S. Census TIGER/Line 2023</p>
     <div class="stat"><b id="stat-count">0</b> road segments rendered</div>
     <div class="stat"><b id="stat-len">0</b> mi of mapped road</div>
-    <div class="credit">Data: U.S. Census Bureau TIGER/Line 2023 (public domain) · Built with D3.js</div>
+    <div class="credit">Roads: U.S. Census Bureau TIGER/Line 2023 · Tides: NOAA CO-OPS (blue markers, click for today's predictions) · Built with D3.js</div>
   </div>
   <div id="legend" style="display:none"></div>
   <div id="search-box" style="display:none">
@@ -325,6 +351,7 @@
     <button id="zoom-reset" title="Reset view" aria-label="Reset view">&#8634;</button>
   </div>
   <div id="tooltip"></div>
+  <div id="tide-popup"></div>
 </div>
 <script src="app.js"></script>
 </body>

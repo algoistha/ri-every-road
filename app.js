@@ -10,6 +10,7 @@
       roadOpacity: 0.9,
       placeText: "#f2f2f0",
       placeHalo: "rgba(11,11,12,0.9)",
+      tideAccent: "#6fb8e0",
       icon: "☾", // moon — click to switch to light
       roadStyles: {
         S1100: { label: "Primary road / highway", color: "#ffffff", width: 1.4, dash: null },
@@ -34,6 +35,7 @@
       roadOpacity: 0.95,
       placeText: "#171716",
       placeHalo: "rgba(244,244,241,0.9)",
+      tideAccent: "#1a6fa3",
       icon: "☀", // sun — click to switch to dark
       roadStyles: {
         S1100: { label: "Primary road / highway", color: "#000000", width: 1.4, dash: null },
@@ -98,6 +100,15 @@
     { name: "Narragansett", lon: -71.4523, lat: 41.4501, tier: "town" },
     { name: "New Shoreham", lon: -71.5762, lat: 41.1707, tier: "town" }
   ];
+
+  // NOAA CO-OPS tide stations along the RI coast (data: api.tidesandcurrents.noaa.gov)
+  const TIDE_STATIONS = [
+    { id: "8452660", name: "Newport", lon: -71.32614, lat: 41.504333 },
+    { id: "8452944", name: "Conimicut Light", lon: -71.3433, lat: 41.7167 },
+    { id: "8454000", name: "Providence", lon: -71.400665, lat: 41.807167 },
+    { id: "8454049", name: "Quonset Point", lon: -71.411, lat: 41.5868 }
+  ];
+  const tideCache = new Map(); // station id -> { status: 'loading'|'ok'|'error', predictions }
 
   let theme = localStorage.getItem("ri-map-theme") || "dark";
   document.documentElement.setAttribute("data-theme", theme);
@@ -200,6 +211,26 @@
       ctx.fillStyle = t.placeText;
       ctx.fillText(p.name, sx, ty);
     }
+
+    // NOAA tide stations — small diamond markers, clickable for today's tide predictions
+    ctx.textBaseline = "middle";
+    for (const s of TIDE_STATIONS) {
+      const sx = s.px * k + currentTransform.x;
+      const sy = s.py * k + currentTransform.y;
+      if (sx < -20 || sx > width + 20 || sy < -20 || sy > height + 20) continue;
+      const r = 4.5;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - r);
+      ctx.lineTo(sx + r, sy);
+      ctx.lineTo(sx, sy + r);
+      ctx.lineTo(sx - r, sy);
+      ctx.closePath();
+      ctx.fillStyle = t.tideAccent;
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = t.placeHalo;
+      ctx.stroke();
+    }
   }
 
   const zoom = d3.zoom()
@@ -211,10 +242,27 @@
 
   d3.select(canvas).call(zoom);
 
+  function hitTideStation(mx, my) {
+    for (const s of TIDE_STATIONS) {
+      if (s.px === undefined) continue;
+      const sx = s.px * currentTransform.k + currentTransform.x;
+      const sy = s.py * currentTransform.k + currentTransform.y;
+      if (Math.hypot(mx - sx, my - sy) <= 10) return s;
+    }
+    return null;
+  }
+
   d3.select(canvas)
     .on("mousemove", (event) => {
-      if (!quadtree) return;
       const [mx, my] = d3.pointer(event);
+      const tideHit = hitTideStation(mx, my);
+      if (tideHit) {
+        tooltip.style("display", "block").text(tideHit.name + " — click for today's tides");
+        tooltip.style("left", (event.pageX + 14) + "px").style("top", (event.pageY + 10) + "px");
+        canvas.style.cursor = "pointer";
+        return;
+      }
+      if (!quadtree) return;
       const wx = (mx - currentTransform.x) / currentTransform.k;
       const wy = (my - currentTransform.y) / currentTransform.k;
       const found = quadtree.find(wx, wy, 6 / currentTransform.k);
@@ -230,7 +278,88 @@
     .on("mouseleave", () => {
       tooltip.style("display", "none");
       canvas.style.cursor = "default";
+    })
+    .on("click", (event) => {
+      const [mx, my] = d3.pointer(event);
+      const tideHit = hitTideStation(mx, my);
+      if (tideHit) {
+        showTidePopup(tideHit, event.pageX, event.pageY);
+      } else {
+        hideTidePopup();
+      }
     });
+
+  const tidePopup = document.getElementById("tide-popup");
+
+  function fmtTideTime(t) {
+    const d = new Date(t.replace(" ", "T"));
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+
+  function renderTidePopup(station) {
+    const entry = tideCache.get(station.id);
+    let body;
+    if (!entry || entry.status === "loading") {
+      body = `<div class="status">Loading tide predictions…</div>`;
+    } else if (entry.status === "error") {
+      body = `<div class="status">Couldn't load tide data right now.</div>`;
+    } else {
+      body = entry.predictions.map(p => `
+        <div class="row">
+          <span class="lbl">${p.type === "H" ? "High" : "Low"} — ${fmtTideTime(p.t)}</span>
+          <span>${parseFloat(p.v).toFixed(1)} ft</span>
+        </div>`).join("");
+    }
+    tidePopup.innerHTML = `
+      <button class="close" title="Close" aria-label="Close">&times;</button>
+      <div class="title">${station.name}</div>
+      <div class="sub">Today's tide predictions (NOAA)</div>
+      ${body}
+    `;
+    tidePopup.querySelector(".close").addEventListener("click", hideTidePopup);
+  }
+
+  function showTidePopup(station, pageX, pageY) {
+    renderTidePopup(station);
+    const left = Math.min(pageX + 14, window.innerWidth - 224);
+    const top = Math.min(pageY + 10, window.innerHeight - 180);
+    tidePopup.style.left = Math.max(8, left) + "px";
+    tidePopup.style.top = Math.max(8, top) + "px";
+    tidePopup.style.display = "block";
+
+    const entry = tideCache.get(station.id);
+    if (!entry || entry.status === "loading") {
+      fetchStationTides(station.id).then(() => {
+        if (tidePopup.style.display === "block") renderTidePopup(station);
+      });
+    }
+  }
+
+  function hideTidePopup() {
+    tidePopup.style.display = "none";
+  }
+
+  function fetchStationTides(id) {
+    if (tideCache.has(id) && tideCache.get(id).status !== "error") return Promise.resolve(tideCache.get(id));
+    tideCache.set(id, { status: "loading" });
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=${id}&product=predictions&datum=MLLW&time_zone=lst_ldt&units=english&format=json&interval=hilo&date=today`;
+    return fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        const entry = { status: "ok", predictions: data.predictions || [] };
+        tideCache.set(id, entry);
+        return entry;
+      })
+      .catch(() => {
+        const entry = { status: "error" };
+        tideCache.set(id, entry);
+        return entry;
+      });
+  }
+
+  function fetchAllTides() {
+    TIDE_STATIONS.forEach(s => fetchStationTides(s.id));
+  }
 
   function applyTheme() {
     document.documentElement.setAttribute("data-theme", theme);
@@ -375,6 +504,9 @@
       if (!document.getElementById("search-box").contains(e.target)) {
         results.style.display = "none";
       }
+      if (!document.getElementById("tide-popup").contains(e.target) && e.target !== canvas) {
+        hideTidePopup();
+      }
     });
   }
 
@@ -427,6 +559,12 @@
       p.px = pr[0];
       p.py = pr[1];
     });
+    TIDE_STATIONS.forEach(s => {
+      const pr = projection([s.lon, s.lat]);
+      s.px = pr[0];
+      s.py = pr[1];
+    });
+    fetchAllTides();
 
     outlinePath2D = new Path2D(path(outlineGeo));
 
