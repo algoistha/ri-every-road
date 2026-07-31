@@ -128,7 +128,7 @@
   }
   #controls .hint { line-height: 1.6; }
 
-  #theme-toggle {
+  #theme-toggle, #download-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -143,7 +143,7 @@
     line-height: 1;
     padding: 0;
   }
-  #theme-toggle:hover { background: rgba(128,128,128,0.15); }
+  #theme-toggle:hover, #download-btn:hover { background: rgba(128,128,128,0.15); }
 
   #zoom-controls {
     position: absolute;
@@ -265,6 +265,7 @@
     <div id="search-results"></div>
   </div>
   <div id="controls">
+    <button id="download-btn" title="Download map as PNG" aria-label="Download map as PNG" style="display:none">&#8681;</button>
     <button id="theme-toggle" title="Toggle light / dark background" aria-label="Toggle light / dark background">&#9788;</button>
     <div class="hint">Scroll / pinch to zoom<br>Drag to pan<br>Hover a road for its name</div>
   </div>

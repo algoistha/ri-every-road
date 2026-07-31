@@ -394,6 +394,14 @@
     d3.select(canvas).transition().duration(300).call(zoom.transform, d3.zoomIdentity);
   });
 
+  document.getElementById("download-btn").addEventListener("click", () => {
+    if (!dataReady) return;
+    const link = document.createElement("a");
+    link.download = `rhode-island-every-road-${theme}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  });
+
   resizeCanvas();
 
   Promise.all([
@@ -465,6 +473,7 @@
     document.getElementById("stat-len").textContent = Math.round(totalMiles).toLocaleString();
     document.getElementById("hud").style.display = "block";
     document.getElementById("search-box").style.display = "block";
+    document.getElementById("download-btn").style.display = "flex";
     document.getElementById("loading").style.display = "none";
   }).catch(err => {
     document.getElementById("loading").textContent = "Failed to load road data: " + err.message;
