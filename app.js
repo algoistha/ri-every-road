@@ -472,6 +472,7 @@
     document.getElementById("stat-count").textContent = roadsGeo.features.length.toLocaleString();
     document.getElementById("stat-len").textContent = Math.round(totalMiles).toLocaleString();
     document.getElementById("hud").style.display = "block";
+    document.getElementById("legend").style.display = "block";
     document.getElementById("search-box").style.display = "block";
     document.getElementById("download-btn").style.display = "flex";
     document.getElementById("loading").style.display = "none";
