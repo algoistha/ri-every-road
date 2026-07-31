@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rhode Island — Every Road</title>
+<meta name="description" content="Every public road in Rhode Island — 31,000+ segments, 8,400+ miles — rendered in grayscale with D3.js from U.S. Census TIGER/Line data.">
+<meta property="og:title" content="Rhode Island — Every Road">
+<meta property="og:description" content="Every public road in Rhode Island, mapped in grayscale. Zoom, pan, search any street.">
+<meta property="og:image" content="og-image.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<style>
+  :root[data-theme="dark"] {
+    --bg: #0b0b0c;
+    --panel: rgba(20,20,22,0.85);
+    --panel-border: rgba(255,255,255,0.08);
+    --text: #e8e8e8;
+    --muted: #9a9a9a;
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f4f1;
+    --panel: rgba(255,255,255,0.85);
+    --panel-border: rgba(0,0,0,0.08);
+    --text: #1c1c1c;
+    --muted: #5c5c5c;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    overflow: hidden;
+    height: 100%;
+    transition: background 0.25s ease, color 0.25s ease;
+  }
+  #map-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+  canvas { display: block; background: var(--bg); transition: background 0.25s ease; }
+
+  #hud {
+    position: absolute;
+    top: 18px; left: 18px;
+    padding: 14px 18px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    max-width: 300px;
+    pointer-events: none;
+    transition: background 0.25s ease, border-color 0.25s ease;
+  }
+  #hud h1 {
+    margin: 0 0 2px 0;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  #hud .sub {
+    margin: 0 0 10px 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #hud .stat {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #hud .stat b { color: var(--text); font-weight: 600; }
+  #hud .credit {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--panel-border);
+    font-size: 10.5px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  #legend {
+    position: absolute;
+    bottom: 18px; left: 18px;
+    padding: 12px 16px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    font-size: 12px;
+    transition: background 0.25s ease, border-color 0.25s ease;
+  }
+  #legend .row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  #legend .swatch { width: 26px; height: 0; border-radius: 2px; }
+  #legend .label { color: var(--muted); }
+
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text);
+    display: none;
+    z-index: 10;
+    white-space: nowrap;
+    backdrop-filter: blur(6px);
+  }
+
+  #controls {
+    position: absolute;
+    top: 18px; right: 18px;
+    padding: 10px 14px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.25s ease, border-color 0.25s ease;
+  }
+  #controls .hint { line-height: 1.6; }
+
+  #theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px; height: 30px;
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0;
+  }
+  #theme-toggle:hover { background: rgba(128,128,128,0.15); }
+
+  #zoom-controls {
+    position: absolute;
+    bottom: 18px; right: 18px;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    overflow: hidden;
+    transition: background 0.25s ease, border-color 0.25s ease;
+  }
+  #zoom-controls button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px; height: 34px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--panel-border);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 17px;
+    line-height: 1;
+    padding: 0;
+  }
+  #zoom-controls button:last-child { border-bottom: none; }
+  #zoom-controls button:hover { background: rgba(128,128,128,0.15); }
+  #zoom-reset { font-size: 12px; }
+
+  #loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: var(--muted); letter-spacing: 0.05em;
+  }
+
+  #search-box {
+    position: absolute;
+    top: 18px; left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    z-index: 5;
+  }
+  #search-input-wrap {
+    display: flex;
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    padding: 0 4px 0 12px;
+    transition: background 0.25s ease, border-color 0.25s ease;
+  }
+  #search-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 9px 6px 9px 0;
+  }
+  #search-input::placeholder { color: var(--muted); }
+  #search-clear {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 6px 8px;
+  }
+  #search-clear:hover { color: var(--text); }
+  #search-results {
+    display: none;
+    margin-top: 6px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    max-height: 240px;
+    overflow-y: auto;
+    transition: background 0.25s ease, border-color 0.25s ease;
+  }
+  .search-result-item {
+    padding: 8px 14px;
+    font-size: 12.5px;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .search-result-item.active, .search-result-item:hover {
+    background: rgba(128,128,128,0.18);
+  }
+</style>
+</head>
+<body>
+<div id="map-container">
+  <div id="loading">Loading every road in Rhode Island…</div>
+  <div id="hud" style="display:none">
+    <h1>Rhode Island</h1>
+    <p class="sub">Every road · U.S. Census TIGER/Line 2023</p>
+    <div class="stat"><b id="stat-count">0</b> road segments rendered</div>
+    <div class="stat"><b id="stat-len">0</b> mi of mapped road</div>
+    <div class="credit">Data: U.S. Census Bureau TIGER/Line 2023 (public domain) · Built with D3.js</div>
+  </div>
+  <div id="legend" style="display:none"></div>
+  <div id="search-box" style="display:none">
+    <div id="search-input-wrap">
+      <input type="text" id="search-input" placeholder="Search a street…" autocomplete="off" spellcheck="false">
+      <button id="search-clear" title="Clear search" aria-label="Clear search">&times;</button>
+    </div>
+    <div id="search-results"></div>
+  </div>
+  <div id="controls">
+    <button id="theme-toggle" title="Toggle light / dark background" aria-label="Toggle light / dark background">&#9788;</button>
+    <div class="hint">Scroll / pinch to zoom<br>Drag to pan<br>Hover a road for its name</div>
+  </div>
+  <div id="zoom-controls">
+    <button id="zoom-in" title="Zoom in" aria-label="Zoom in">&#43;</button>
+    <button id="zoom-out" title="Zoom out" aria-label="Zoom out">&#8722;</button>
+    <button id="zoom-reset" title="Reset view" aria-label="Reset view">&#8634;</button>
+  </div>
+  <div id="tooltip"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
