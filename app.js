@@ -10,6 +10,7 @@
       roadOpacity: 0.9,
       placeText: "#f2f2f0",
       placeHalo: "rgba(11,11,12,0.9)",
+      roadLabelText: "#c9c9c9",
       tideAccent: "#6fb8e0",
       icon: "☾", // moon — click to switch to light
       roadStyles: {
@@ -35,6 +36,7 @@
       roadOpacity: 0.95,
       placeText: "#171716",
       placeHalo: "rgba(244,244,241,0.9)",
+      roadLabelText: "#4a4a4a",
       tideAccent: "#1a6fa3",
       icon: "☀", // sun — click to switch to dark
       roadStyles: {
@@ -109,6 +111,44 @@
     { id: "8454049", name: "Quonset Point", lon: -71.411, lat: 41.5868 }
   ];
   const tideCache = new Map(); // station id -> { status: 'loading'|'ok'|'error', predictions }
+
+  const MAJOR_ROAD_MIN_MILES = 1; // only highways/arterials with a contiguous stretch at least this long get a name label
+  const ROAD_LABEL_MIN_ZOOM = 2;  // don't show road-name labels until zoomed in this far (avoids full-state clutter)
+  let majorRoads = []; // populated after data loads: [{ label, x, y, angle }]
+
+  function formatRoadName(name) {
+    return name
+      .replace(/^I-\s*/, "I-")
+      .replace(/^State Rte /, "RI-")
+      .replace(/^US Hwy /, "US-")
+      .trim();
+  }
+
+  // finds the geometric midpoint of a projected point path and the local
+  // tangent angle there, normalized so label text never renders upside-down
+  function computeLabelAnchor(projectedPts) {
+    if (projectedPts.length < 2) return null;
+    const cum = [0];
+    for (let i = 1; i < projectedPts.length; i++) {
+      cum.push(cum[i - 1] + Math.hypot(
+        projectedPts[i][0] - projectedPts[i - 1][0],
+        projectedPts[i][1] - projectedPts[i - 1][1]
+      ));
+    }
+    const total = cum[cum.length - 1];
+    if (total === 0) return null;
+    const half = total / 2;
+    let idx = cum.findIndex(c => c >= half);
+    if (idx <= 0) idx = 1;
+    const t = (half - cum[idx - 1]) / (cum[idx] - cum[idx - 1] || 1);
+    const a = projectedPts[idx - 1], b = projectedPts[idx];
+    const x = a[0] + (b[0] - a[0]) * t;
+    const y = a[1] + (b[1] - a[1]) * t;
+    let angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    if (angle > Math.PI / 2) angle -= Math.PI;
+    if (angle < -Math.PI / 2) angle += Math.PI;
+    return { x, y, angle };
+  }
 
   let theme = localStorage.getItem("ri-map-theme") || "dark";
   document.documentElement.setAttribute("data-theme", theme);
@@ -219,6 +259,27 @@
       targetCtx.strokeText(p.name, sx, ty);
       targetCtx.fillStyle = t.placeText;
       targetCtx.fillText(p.name, sx, ty);
+    }
+
+    // major road/highway name labels — rotated to follow the road, only
+    // shown once zoomed in enough that they wouldn't just clutter the state view
+    if (k >= ROAD_LABEL_MIN_ZOOM) {
+      targetCtx.textBaseline = "middle";
+      targetCtx.font = "600 9.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+      for (const r of majorRoads) {
+        const sx = r.x * k + transform.x;
+        const sy = r.y * k + transform.y;
+        if (sx < -80 || sx > w + 80 || sy < -20 || sy > h + 20) continue;
+        targetCtx.save();
+        targetCtx.translate(sx, sy);
+        targetCtx.rotate(r.angle);
+        targetCtx.lineWidth = 2.5;
+        targetCtx.strokeStyle = t.placeHalo;
+        targetCtx.strokeText(r.label, 0, 0);
+        targetCtx.fillStyle = t.roadLabelText;
+        targetCtx.fillText(r.label, 0, 0);
+        targetCtx.restore();
+      }
     }
 
     if (!opts.skipTideMarkers) {
@@ -705,6 +766,30 @@
       }
     });
     quadtree = d3.quadtree().x(d => d.x).y(d => d.y).addAll(points);
+
+    // major road name labels — group same-named highways/arterials, use the
+    // longest contiguous stretch of each as the representative geometry
+    const majorByName = new Map();
+    roadsGeo.features.forEach(f => {
+      const mtfcc = f.properties.MTFCC;
+      const name = f.properties.FULLNAME;
+      if ((mtfcc !== "S1100" && mtfcc !== "S1200") || !name) return;
+      if (!majorByName.has(name)) majorByName.set(name, []);
+      majorByName.get(name).push(f);
+    });
+    majorRoads = [];
+    majorByName.forEach((feats, name) => {
+      let longest = null, longestLen = 0;
+      feats.forEach(f => {
+        const len = d3.geoLength(f) * 6371008.8;
+        if (len > longestLen) { longestLen = len; longest = f; }
+      });
+      if (!longest || longestLen / 1609.34 < MAJOR_ROAD_MIN_MILES) return;
+      const pts = longest.geometry.coordinates.map(c => projection(c)).filter(p => p);
+      const anchor = computeLabelAnchor(pts);
+      if (!anchor) return;
+      majorRoads.push({ label: formatRoadName(name), x: anchor.x, y: anchor.y, angle: anchor.angle });
+    });
 
     setupSearch(nameMap, path);
 

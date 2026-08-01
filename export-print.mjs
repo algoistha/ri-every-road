@@ -5,7 +5,7 @@
 import fs from "fs";
 import nodePath from "path";
 import { fileURLToPath } from "url";
-import { geoMercator, geoPath } from "d3-geo";
+import { geoMercator, geoPath, geoLength } from "d3-geo";
 import * as topojson from "topojson-client";
 import sharp from "sharp";
 
@@ -21,11 +21,12 @@ const DPI = parseFloat(args.dpi || 150);
 const THEME = args.theme === "light" ? "light" : "dark";
 const OUT = args.out || `ri-every-road-print-${THEME}-${HEIGHT_IN}in.png`;
 const MAX_PX = 16000; // safety cap well under common raster/print-pipeline limits
+const ROAD_LABEL_MIN_MI = parseFloat(args["road-label-min-mi"] || 3); // stricter than the interactive map — a static poster can't zoom to declutter
 
 const THEMES = {
   dark: {
     bg: "#0b0b0c", outlineFill: "#141414", outlineStroke: "#3a3a3a",
-    text: "#f2f2f0", halo: "#0b0b0c", muted: "#9a9a9a",
+    text: "#f2f2f0", halo: "#0b0b0c", muted: "#9a9a9a", roadLabelText: "#c9c9c9",
     roadStyles: {
       S1100: { color: "#ffffff", width: 1.4 }, S1200: { color: "#dcdcdc", width: 1.0 },
       S1630: { color: "#c4c4c4", width: 0.7 }, S1400: { color: "#9a9a9a", width: 0.45 },
@@ -38,7 +39,7 @@ const THEMES = {
   },
   light: {
     bg: "#f4f4f1", outlineFill: "#eae9e4", outlineStroke: "#c7c5bd",
-    text: "#171716", halo: "#f4f4f1", muted: "#5c5c5c",
+    text: "#171716", halo: "#f4f4f1", muted: "#5c5c5c", roadLabelText: "#4a4a4a",
     roadStyles: {
       S1100: { color: "#000000", width: 1.4 }, S1200: { color: "#2b2b2b", width: 1.0 },
       S1630: { color: "#454545", width: 0.7 }, S1400: { color: "#767676", width: 0.45 },
@@ -76,6 +77,37 @@ const PLACES = [
   { name: "South Kingstown", lon: -71.5292, lat: 41.4551 }, { name: "Narragansett", lon: -71.4523, lat: 41.4501 },
   { name: "New Shoreham", lon: -71.5762, lat: 41.1707 }
 ];
+
+function formatRoadName(name) {
+  return name
+    .replace(/^I-\s*/, "I-")
+    .replace(/^State Rte /, "RI-")
+    .replace(/^US Hwy /, "US-")
+    .trim();
+}
+
+// geometric midpoint of a projected point path + local tangent angle,
+// normalized so label text never renders upside-down
+function computeLabelAnchor(pts) {
+  if (pts.length < 2) return null;
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  }
+  const total = cum[cum.length - 1];
+  if (total === 0) return null;
+  const half = total / 2;
+  let idx = cum.findIndex(c => c >= half);
+  if (idx <= 0) idx = 1;
+  const t = (half - cum[idx - 1]) / (cum[idx] - cum[idx - 1] || 1);
+  const a = pts[idx - 1], b = pts[idx];
+  const x = a[0] + (b[0] - a[0]) * t;
+  const y = a[1] + (b[1] - a[1]) * t;
+  let angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  if (angle > Math.PI / 2) angle -= Math.PI;
+  if (angle < -Math.PI / 2) angle += Math.PI;
+  return { x, y, angleDeg: angle * 180 / Math.PI };
+}
 
 function readTopo(file) {
   const t = JSON.parse(fs.readFileSync(nodePath.join(__dirname, "data", file), "utf8"));
@@ -129,6 +161,33 @@ ORDER.forEach(key => {
 });
 
 const labelScale = DPI / 96;
+
+// major road name labels — group same-named highways/arterials, use the
+// longest contiguous stretch of each as the representative geometry
+const majorByName = new Map();
+for (const f of roadsGeo.features) {
+  const mtfcc = f.properties.MTFCC;
+  const name = f.properties.FULLNAME;
+  if ((mtfcc !== "S1100" && mtfcc !== "S1200") || !name) continue;
+  if (!majorByName.has(name)) majorByName.set(name, []);
+  majorByName.get(name).push(f);
+}
+const roadLabelSize = 9 * labelScale;
+let roadLabelSvg = "";
+majorByName.forEach((feats, name) => {
+  let longest = null, longestLen = 0;
+  for (const f of feats) {
+    const len = geoLength(f) * 6371008.8;
+    if (len > longestLen) { longestLen = len; longest = f; }
+  }
+  if (!longest || longestLen / 1609.34 < ROAD_LABEL_MIN_MI) return;
+  const pts = longest.geometry.coordinates.map(c => projection(c)).filter(p => p);
+  const anchor = computeLabelAnchor(pts);
+  if (!anchor) return;
+  const label = formatRoadName(name);
+  roadLabelSvg += `<text x="${anchor.x.toFixed(1)}" y="${anchor.y.toFixed(1)}" transform="rotate(${anchor.angleDeg.toFixed(2)} ${anchor.x.toFixed(1)} ${anchor.y.toFixed(1)})" text-anchor="middle" dominant-baseline="middle" font-family="Arial, Helvetica, sans-serif" font-size="${roadLabelSize.toFixed(1)}" font-weight="600" fill="${T.roadLabelText}" stroke="${T.halo}" stroke-width="${(2.5 * labelScale).toFixed(1)}" paint-order="stroke">${label}</text>\n`;
+});
+
 const labelSvg = PLACES.map(p => {
   const [x, y] = projection([p.lon, p.lat]);
   const isCity = CITIES.has(p.name);
@@ -149,6 +208,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W_PX}" height="${H
   <rect width="${W_PX}" height="${H_PX}" fill="${T.bg}"/>
   <path d="${path(outlineGeo)}" fill="${T.outlineFill}" stroke="${T.outlineStroke}" stroke-width="${(1.2 * labelScale).toFixed(2)}"/>
   ${roadPaths}
+  ${roadLabelSvg}
   ${labelSvg}
   <text x="${pad}" y="${H_PX - pad - subSize - 6 * labelScale}" font-family="Arial, Helvetica, sans-serif" font-size="${titleSize.toFixed(1)}" font-weight="800" letter-spacing="${2 * labelScale}" fill="${T.text}">RHODE ISLAND</text>
   <text x="${pad}" y="${H_PX - pad}" font-family="Arial, Helvetica, sans-serif" font-size="${subSize.toFixed(1)}" fill="${T.muted}">Every public road · ${roadsGeo.features.length.toLocaleString()} segments · U.S. Census TIGER/Line 2025</text>
