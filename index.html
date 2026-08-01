@@ -163,7 +163,7 @@
   }
   #controls .hint { line-height: 1.6; }
 
-  #theme-toggle, #download-btn {
+  #theme-toggle, #download-btn, #export-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -178,7 +178,67 @@
     line-height: 1;
     padding: 0;
   }
-  #theme-toggle:hover, #download-btn:hover { background: rgba(128,128,128,0.15); }
+  #export-btn { font-size: 10.5px; font-weight: 700; }
+  #theme-toggle:hover, #download-btn:hover, #export-btn:hover { background: rgba(128,128,128,0.15); }
+
+  #export-panel {
+    display: none;
+    position: absolute;
+    top: 56px; right: 18px;
+    width: 260px;
+    padding: 14px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    font-size: 12px;
+    color: var(--text);
+    z-index: 9;
+    transition: background 0.25s ease, border-color 0.25s ease;
+  }
+  #export-panel .title { font-weight: 600; margin-bottom: 2px; }
+  #export-panel .note { color: var(--muted); font-size: 10.5px; margin-bottom: 10px; line-height: 1.4; }
+  #export-presets { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .export-preset {
+    text-align: left;
+    padding: 7px 10px;
+    background: rgba(128,128,128,0.1);
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    color: var(--text);
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .export-preset:hover { background: rgba(128,128,128,0.2); }
+  #export-panel .custom-row {
+    display: flex; align-items: center; gap: 6px;
+    border-top: 1px solid var(--panel-border);
+    padding-top: 10px;
+    margin-top: 2px;
+  }
+  #export-panel .custom-row label { color: var(--muted); font-size: 10.5px; flex-shrink: 0; }
+  #export-panel input[type="number"] {
+    width: 52px;
+    background: rgba(128,128,128,0.1);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 11.5px;
+    padding: 5px 6px;
+  }
+  #export-dims { color: var(--muted); font-size: 10.5px; margin: 6px 0 10px; min-height: 1.2em; }
+  #export-run {
+    width: 100%;
+    padding: 8px;
+    background: var(--text);
+    color: var(--bg);
+    border: none;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #export-run:disabled { opacity: 0.6; cursor: default; }
 
   #zoom-controls {
     position: absolute;
@@ -294,7 +354,13 @@
       border-radius: 12px;
     }
     #controls .hint { display: none; }
-    #theme-toggle, #download-btn { width: 40px; height: 40px; font-size: 17px; }
+    #theme-toggle, #download-btn, #export-btn { width: 40px; height: 40px; font-size: 17px; }
+    #export-btn { font-size: 11px; }
+
+    #export-panel {
+      top: 156px; right: 8px;
+      width: auto; left: 8px;
+    }
 
     #hud {
       top: auto; bottom: 8px; left: 8px; right: 84px;
@@ -342,8 +408,23 @@
   </div>
   <div id="controls">
     <button id="download-btn" title="Download map as PNG" aria-label="Download map as PNG" style="display:none">&#8681;</button>
+    <button id="export-btn" title="Export high-resolution image for printing" aria-label="Export high-resolution image for printing" style="display:none">HD</button>
     <button id="theme-toggle" title="Toggle light / dark background" aria-label="Toggle light / dark background">&#9788;</button>
     <div class="hint">Scroll / pinch to zoom<br>Drag to pan<br>Hover a road for its name</div>
+  </div>
+  <div id="export-panel">
+    <div class="title">Export high-resolution</div>
+    <div class="note">Exports the area currently in view — pan/zoom to frame it first.</div>
+    <div id="export-presets"></div>
+    <div class="custom-row">
+      <label>Width</label>
+      <input type="number" id="export-width-in" value="24" min="1" step="1">
+      <label>in @</label>
+      <input type="number" id="export-dpi" value="150" min="50" step="10">
+      <label>DPI</label>
+    </div>
+    <div id="export-dims"></div>
+    <button id="export-run">Export</button>
   </div>
   <div id="zoom-controls">
     <button id="zoom-in" title="Zoom in" aria-label="Zoom in">&#43;</button>

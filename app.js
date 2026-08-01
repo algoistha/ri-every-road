@@ -147,90 +147,105 @@
     draw();
   }
 
-  function draw() {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // Renders the full scene into any canvas context at any resolution.
+  // resScale is an extra uniform magnification on top of the normal view —
+  // 1 for the live on-screen canvas (where dpr is passed as resScale), or a
+  // much larger number for high-res export. Because it's applied as one
+  // outer ctx.scale() wrapping everything (including text), every existing
+  // "divide by k" line-width/font/radius formula below stays correct
+  // unchanged — the outer scale multiplies the whole result automatically.
+  function renderMap(targetCtx, w, h, transform, resScale, opts) {
+    opts = opts || {};
+    targetCtx.setTransform(resScale, 0, 0, resScale, 0, 0);
     const t = THEMES[theme];
-    ctx.fillStyle = t.outlineFill; // fallback backdrop before data loads
-    ctx.fillRect(0, 0, width, height);
+    targetCtx.fillStyle = t.outlineFill;
+    targetCtx.fillRect(0, 0, w, h);
     if (!dataReady) return;
 
-    ctx.save();
-    ctx.translate(currentTransform.x, currentTransform.y);
-    ctx.scale(currentTransform.k, currentTransform.k);
-    const k = currentTransform.k;
+    const k = transform.k;
 
-    ctx.fillStyle = t.outlineFill;
-    ctx.fill(outlinePath2D);
-    ctx.lineWidth = 1 / k;
-    ctx.strokeStyle = t.outlineStroke;
-    ctx.setLineDash([]);
-    ctx.stroke(outlinePath2D);
+    targetCtx.save();
+    targetCtx.translate(transform.x, transform.y);
+    targetCtx.scale(k, k);
 
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.globalAlpha = t.roadOpacity;
+    targetCtx.fillStyle = t.outlineFill;
+    targetCtx.fill(outlinePath2D);
+    targetCtx.lineWidth = 1 / k;
+    targetCtx.strokeStyle = t.outlineStroke;
+    targetCtx.setLineDash([]);
+    targetCtx.stroke(outlinePath2D);
+
+    targetCtx.lineCap = "round";
+    targetCtx.lineJoin = "round";
+    targetCtx.globalAlpha = t.roadOpacity;
     for (const bucket of roadBuckets) {
       const style = styleFor(bucket.mtfcc);
-      ctx.strokeStyle = style.color;
-      ctx.lineWidth = Math.max(style.width / k, 0.12);
-      ctx.setLineDash(style.dash ? style.dash.map(v => v / k) : []);
-      ctx.stroke(bucket.path2d);
+      targetCtx.strokeStyle = style.color;
+      targetCtx.lineWidth = Math.max(style.width / k, 0.12);
+      targetCtx.setLineDash(style.dash ? style.dash.map(v => v / k) : []);
+      targetCtx.stroke(bucket.path2d);
     }
-    ctx.globalAlpha = 1;
+    targetCtx.globalAlpha = 1;
 
     if (highlightPath2D) {
-      ctx.setLineDash([]);
-      ctx.strokeStyle = t.highlight;
-      ctx.lineWidth = Math.max(2.4 / k, 1.6 / k);
-      ctx.stroke(highlightPath2D);
+      targetCtx.setLineDash([]);
+      targetCtx.strokeStyle = t.highlight;
+      targetCtx.lineWidth = Math.max(2.4 / k, 1.6 / k);
+      targetCtx.stroke(highlightPath2D);
     }
 
-    ctx.restore();
+    targetCtx.restore();
 
     // town/city labels — drawn in screen space (not zoom-scaled) so text stays crisp
-    ctx.textAlign = "center";
-    ctx.lineJoin = "round";
+    targetCtx.textAlign = "center";
+    targetCtx.lineJoin = "round";
     for (const p of PLACES) {
-      const sx = p.px * k + currentTransform.x;
-      const sy = p.py * k + currentTransform.y;
-      if (sx < -60 || sx > width + 60 || sy < -30 || sy > height + 30) continue;
+      const sx = p.px * k + transform.x;
+      const sy = p.py * k + transform.y;
+      if (sx < -60 || sx > w + 60 || sy < -30 || sy > h + 30) continue;
       const isCity = p.tier === "city";
       const dotR = isCity ? 2.6 : 1.8;
-      ctx.beginPath();
-      ctx.arc(sx, sy, dotR, 0, Math.PI * 2);
-      ctx.fillStyle = t.placeText;
-      ctx.fill();
+      targetCtx.beginPath();
+      targetCtx.arc(sx, sy, dotR, 0, Math.PI * 2);
+      targetCtx.fillStyle = t.placeText;
+      targetCtx.fill();
 
-      ctx.font = (isCity ? "700 13px " : "600 11px ") +
+      targetCtx.font = (isCity ? "700 13px " : "600 11px ") +
         "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
-      ctx.textBaseline = "bottom";
+      targetCtx.textBaseline = "bottom";
       const ty = sy - dotR - 3;
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = t.placeHalo;
-      ctx.strokeText(p.name, sx, ty);
-      ctx.fillStyle = t.placeText;
-      ctx.fillText(p.name, sx, ty);
+      targetCtx.lineWidth = 3;
+      targetCtx.strokeStyle = t.placeHalo;
+      targetCtx.strokeText(p.name, sx, ty);
+      targetCtx.fillStyle = t.placeText;
+      targetCtx.fillText(p.name, sx, ty);
     }
 
-    // NOAA tide stations — small diamond markers, clickable for today's tide predictions
-    ctx.textBaseline = "middle";
-    for (const s of TIDE_STATIONS) {
-      const sx = s.px * k + currentTransform.x;
-      const sy = s.py * k + currentTransform.y;
-      if (sx < -20 || sx > width + 20 || sy < -20 || sy > height + 20) continue;
-      const r = 4.5;
-      ctx.beginPath();
-      ctx.moveTo(sx, sy - r);
-      ctx.lineTo(sx + r, sy);
-      ctx.lineTo(sx, sy + r);
-      ctx.lineTo(sx - r, sy);
-      ctx.closePath();
-      ctx.fillStyle = t.tideAccent;
-      ctx.fill();
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = t.placeHalo;
-      ctx.stroke();
+    if (!opts.skipTideMarkers) {
+      // NOAA tide stations — small diamond markers, clickable for today's tide predictions
+      targetCtx.textBaseline = "middle";
+      for (const s of TIDE_STATIONS) {
+        const sx = s.px * k + transform.x;
+        const sy = s.py * k + transform.y;
+        if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
+        const r = 4.5;
+        targetCtx.beginPath();
+        targetCtx.moveTo(sx, sy - r);
+        targetCtx.lineTo(sx + r, sy);
+        targetCtx.lineTo(sx, sy + r);
+        targetCtx.lineTo(sx - r, sy);
+        targetCtx.closePath();
+        targetCtx.fillStyle = t.tideAccent;
+        targetCtx.fill();
+        targetCtx.lineWidth = 1.5;
+        targetCtx.strokeStyle = t.placeHalo;
+        targetCtx.stroke();
+      }
     }
+  }
+
+  function draw() {
+    renderMap(ctx, width, height, currentTransform, dpr);
   }
 
   const zoom = d3.zoom()
@@ -526,13 +541,111 @@
     d3.select(canvas).transition().duration(300).call(zoom.transform, d3.zoomIdentity);
   });
 
+  function downloadCanvas(sourceCanvas, filename) {
+    sourceCanvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.download = filename;
+      link.href = url;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, "image/png");
+  }
+
   document.getElementById("download-btn").addEventListener("click", () => {
     if (!dataReady) return;
-    const link = document.createElement("a");
-    link.download = `rhode-island-every-road-${theme}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
+    downloadCanvas(canvas, `rhode-island-every-road-${theme}.png`);
   });
+
+  // High-res export: renders the CURRENT view (whatever the user has panned/
+  // zoomed to) into an off-screen canvas at a much larger pixel size, using
+  // the same renderMap() the live view uses, then downloads it as a PNG.
+  const MAX_EXPORT_PX = 14000; // stay safely under common browser canvas limits
+  const EXPORT_PRESETS = [
+    { label: "Wallpaper — 2560×1440", w: 2560 },
+    { label: "Poster — 24×36 in @ 200 DPI", inches: 36, dpi: 200 },
+    { label: "Wall print — 7 ft @ 150 DPI", inches: 84, dpi: 150 }
+  ];
+
+  function exportHighRes(targetW) {
+    if (!dataReady) return;
+    const scaleFactor = targetW / width;
+    const targetH = Math.round(height * scaleFactor);
+    const btn = document.getElementById("export-run");
+    const originalLabel = btn ? btn.textContent : null;
+    if (btn) { btn.textContent = "Rendering…"; btn.disabled = true; }
+
+    setTimeout(() => {
+      try {
+        const off = document.createElement("canvas");
+        off.width = targetW;
+        off.height = targetH;
+        const offCtx = off.getContext("2d");
+        renderMap(offCtx, width, height, currentTransform, scaleFactor);
+        downloadCanvas(off, `rhode-island-every-road-${theme}-${targetW}x${targetH}.png`);
+      } catch (err) {
+        console.error(err);
+        alert("Export failed — try a smaller size.");
+      } finally {
+        if (btn) { btn.textContent = originalLabel; btn.disabled = false; }
+      }
+    }, 30);
+  }
+
+  function setupExportPanel() {
+    const btn = document.getElementById("export-btn");
+    const panel = document.getElementById("export-panel");
+    const presetsEl = document.getElementById("export-presets");
+    const widthInput = document.getElementById("export-width-in");
+    const dpiInput = document.getElementById("export-dpi");
+    const dimsOut = document.getElementById("export-dims");
+    const runBtn = document.getElementById("export-run");
+
+    EXPORT_PRESETS.forEach(preset => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "export-preset";
+      b.textContent = preset.label;
+      b.addEventListener("click", () => {
+        panel.style.display = "none";
+        const w = preset.w || Math.round(preset.inches * preset.dpi);
+        exportHighRes(Math.min(w, MAX_EXPORT_PX));
+      });
+      presetsEl.appendChild(b);
+    });
+
+    function updateDims() {
+      const inches = parseFloat(widthInput.value) || 0;
+      const dpi = parseFloat(dpiInput.value) || 0;
+      const w = Math.round(inches * dpi);
+      const h = Math.round(w * (height / width));
+      dimsOut.textContent = w > 0
+        ? `${w.toLocaleString()} × ${h.toLocaleString()} px${w > MAX_EXPORT_PX ? " (will be capped)" : ""}`
+        : "";
+    }
+    widthInput.addEventListener("input", updateDims);
+    dpiInput.addEventListener("input", updateDims);
+    updateDims();
+
+    runBtn.addEventListener("click", () => {
+      const inches = parseFloat(widthInput.value) || 0;
+      const dpi = parseFloat(dpiInput.value) || 0;
+      let w = Math.round(inches * dpi);
+      if (!w || w < 100) return;
+      w = Math.min(w, MAX_EXPORT_PX);
+      panel.style.display = "none";
+      exportHighRes(w);
+    });
+
+    btn.addEventListener("click", () => {
+      panel.style.display = panel.style.display === "block" ? "none" : "block";
+    });
+    document.addEventListener("click", (e) => {
+      if (!panel.contains(e.target) && e.target !== btn) panel.style.display = "none";
+    });
+  }
+  setupExportPanel();
 
   resizeCanvas();
 
@@ -613,6 +726,7 @@
     document.getElementById("legend").style.display = "block";
     document.getElementById("search-box").style.display = "block";
     document.getElementById("download-btn").style.display = "flex";
+    document.getElementById("export-btn").style.display = "flex";
     document.getElementById("loading").style.display = "none";
   }).catch(err => {
     document.getElementById("loading").textContent = "Failed to load road data: " + err.message;
