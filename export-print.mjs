@@ -151,7 +151,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W_PX}" height="${H
   ${roadPaths}
   ${labelSvg}
   <text x="${pad}" y="${H_PX - pad - subSize - 6 * labelScale}" font-family="Arial, Helvetica, sans-serif" font-size="${titleSize.toFixed(1)}" font-weight="800" letter-spacing="${2 * labelScale}" fill="${T.text}">RHODE ISLAND</text>
-  <text x="${pad}" y="${H_PX - pad}" font-family="Arial, Helvetica, sans-serif" font-size="${subSize.toFixed(1)}" fill="${T.muted}">Every public road · ${roadsGeo.features.length.toLocaleString()} segments · U.S. Census TIGER/Line 2023</text>
+  <text x="${pad}" y="${H_PX - pad}" font-family="Arial, Helvetica, sans-serif" font-size="${subSize.toFixed(1)}" fill="${T.muted}">Every public road · ${roadsGeo.features.length.toLocaleString()} segments · U.S. Census TIGER/Line 2025</text>
 </svg>`;
 
 console.log(`Rendering ${W_PX}x${H_PX}px (${(W_PX/DPI).toFixed(1)}x${(H_PX/DPI).toFixed(1)} in @ ${DPI} DPI), ${THEME} theme...`);

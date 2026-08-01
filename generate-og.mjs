@@ -91,7 +91,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   ${roadPaths}
   ${labelSvg}
   <text x="30" y="${H - 26}" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="${TEXT}">Rhode Island — Every Road</text>
-  <text x="30" y="${H - 10}" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#9a9a9a">${roadsGeo.features.length.toLocaleString()} road segments · U.S. Census TIGER/Line 2023</text>
+  <text x="30" y="${H - 10}" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#9a9a9a">${roadsGeo.features.length.toLocaleString()} road segments · U.S. Census TIGER/Line 2025</text>
 </svg>`;
 
 fs.writeFileSync(nodePath.join(__dirname, "og-source.svg"), svg);
