@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rhode Island — Every Road</title>
+<link rel="icon" type="image/svg+xml" href="ri-flag.svg">
 <meta name="description" content="Every public road in Rhode Island — 30,000+ segments, 8,000+ miles — rendered in grayscale with D3.js from U.S. Census TIGER/Line data.">
 <meta property="og:title" content="Rhode Island — Every Road">
 <meta property="og:description" content="Every public road in Rhode Island, mapped in grayscale. Zoom, pan, search any street.">
@@ -70,6 +71,16 @@
     font-size: 17px;
     font-weight: 600;
     letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .flag-badge {
+    width: 24px;
+    height: 16px;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(128,128,128,0.35);
+    flex-shrink: 0;
   }
   #hud .sub {
     margin: 0 0 10px 0;
@@ -392,7 +403,7 @@
 <div id="map-container">
   <div id="loading">Loading every road in Rhode Island…</div>
   <div id="hud" style="display:none">
-    <h1>Rhode Island</h1>
+    <h1><img src="ri-flag.svg" alt="Rhode Island flag" class="flag-badge">Rhode Island</h1>
     <p class="sub">Every road · U.S. Census TIGER/Line 2025</p>
     <div class="stat"><b id="stat-count">0</b> road segments rendered</div>
     <div class="stat"><b id="stat-len">0</b> mi of mapped road</div>
