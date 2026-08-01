@@ -163,7 +163,7 @@
   }
   #controls .hint { line-height: 1.6; }
 
-  #theme-toggle, #download-btn, #export-btn {
+  #theme-toggle, #export-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -179,7 +179,7 @@
     padding: 0;
   }
   #export-btn { font-size: 10.5px; font-weight: 700; }
-  #theme-toggle:hover, #download-btn:hover, #export-btn:hover { background: rgba(128,128,128,0.15); }
+  #theme-toggle:hover, #export-btn:hover { background: rgba(128,128,128,0.15); }
 
   #export-panel {
     display: none;
@@ -354,7 +354,7 @@
       border-radius: 12px;
     }
     #controls .hint { display: none; }
-    #theme-toggle, #download-btn, #export-btn { width: 40px; height: 40px; font-size: 17px; }
+    #theme-toggle, #export-btn { width: 40px; height: 40px; font-size: 17px; }
     #export-btn { font-size: 11px; }
 
     #export-panel {
@@ -407,7 +407,6 @@
     <div id="search-results"></div>
   </div>
   <div id="controls">
-    <button id="download-btn" title="Download map as PNG" aria-label="Download map as PNG" style="display:none">&#8681;</button>
     <button id="export-btn" title="Export high-resolution image for printing" aria-label="Export high-resolution image for printing" style="display:none">HD</button>
     <button id="theme-toggle" title="Toggle light / dark background" aria-label="Toggle light / dark background">&#9788;</button>
     <div class="hint">Scroll / pinch to zoom<br>Drag to pan<br>Hover a road for its name</div>

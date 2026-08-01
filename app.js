@@ -553,11 +553,6 @@
     }, "image/png");
   }
 
-  document.getElementById("download-btn").addEventListener("click", () => {
-    if (!dataReady) return;
-    downloadCanvas(canvas, `rhode-island-every-road-${theme}.png`);
-  });
-
   // High-res export: renders the CURRENT view (whatever the user has panned/
   // zoomed to) into an off-screen canvas at a much larger pixel size, using
   // the same renderMap() the live view uses, then downloads it as a PNG.
@@ -725,7 +720,6 @@
     document.getElementById("hud").style.display = "block";
     document.getElementById("legend").style.display = "block";
     document.getElementById("search-box").style.display = "block";
-    document.getElementById("download-btn").style.display = "flex";
     document.getElementById("export-btn").style.display = "flex";
     document.getElementById("loading").style.display = "none";
   }).catch(err => {
