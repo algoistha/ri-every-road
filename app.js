@@ -113,8 +113,9 @@
   const tideCache = new Map(); // station id -> { status: 'loading'|'ok'|'error', predictions }
 
   const MAJOR_ROAD_MIN_MILES = 1; // only highways/arterials with a contiguous stretch at least this long get a name label
-  const ROAD_LABEL_MIN_ZOOM = 2;  // don't show road-name labels until zoomed in this far (avoids full-state clutter)
-  let majorRoads = []; // populated after data loads: [{ label, x, y, angle }]
+  const ROAD_LABEL_MIN_ZOOM = 6;  // Google Maps-style: street names only appear once zoomed to a town/neighborhood scale
+  const ROAD_LABEL_MAX_PER_FRAME = 60; // hard cap so a busy viewport can't tank frame time regardless of zoom
+  let majorRoads = []; // populated after data loads, sorted longest-first: [{ label, x, y, angle }]
 
   function formatRoadName(name) {
     return name
@@ -266,7 +267,9 @@
     if (k >= ROAD_LABEL_MIN_ZOOM) {
       targetCtx.textBaseline = "middle";
       targetCtx.font = "600 9.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+      let drawn = 0;
       for (const r of majorRoads) {
+        if (drawn >= ROAD_LABEL_MAX_PER_FRAME) break;
         const sx = r.x * k + transform.x;
         const sy = r.y * k + transform.y;
         if (sx < -80 || sx > w + 80 || sy < -20 || sy > h + 20) continue;
@@ -279,6 +282,7 @@
         targetCtx.fillStyle = t.roadLabelText;
         targetCtx.fillText(r.label, 0, 0);
         targetCtx.restore();
+        drawn++;
       }
     }
 
@@ -788,8 +792,9 @@
       const pts = longest.geometry.coordinates.map(c => projection(c)).filter(p => p);
       const anchor = computeLabelAnchor(pts);
       if (!anchor) return;
-      majorRoads.push({ label: formatRoadName(name), x: anchor.x, y: anchor.y, angle: anchor.angle });
+      majorRoads.push({ label: formatRoadName(name), x: anchor.x, y: anchor.y, angle: anchor.angle, lenMi: longestLen / 1609.34 });
     });
+    majorRoads.sort((a, b) => b.lenMi - a.lenMi); // longest/most important first, so the per-frame cap favors them
 
     setupSearch(nameMap, path);
 
